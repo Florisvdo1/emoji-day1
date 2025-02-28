@@ -2,165 +2,243 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" 
-        content="width=device-width, initial-scale=1.0, 
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0,
+                 user-scalable=no,
                  viewport-fit=cover" />
-  <title>3D Emoji Day Planner</title>
-
-  <!-- Inline all your CSS (main.css + advanced transitions + 3D illusions) -->
+  <title>Emoji Day Planner - Full Integration</title>
   <style>
-    /* Basic resets */
-    *, *::before, *::after { box-sizing: border-box; }
-
-    body {
+    /* --- Basic Reset & Body Styles --- */
+    * {
+      box-sizing: border-box;
       margin: 0; 
+      padding: 0;
+    }
+    body {
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      background: #ffffff; 
+      background: #ffffff;
       color: #000;
-      perspective: 800px; /* For subtle 3D transforms if desired */
+      /* Test if you see the white background or if iOS forcibly changes it */
     }
 
+    /* --- Header & Clock --- */
     header {
-      background: #003366; 
+      background: #003366; /* dark blue */
       color: #fff;
       text-align: center;
-      padding: 1em;
-      position: sticky; 
-      top: 0; 
-      z-index: 10;
+      padding: 1em 0.5em;
+      position: sticky;
+      top: 0;
+      z-index: 999;
+    }
+    #currentTime {
+      margin-top: 0.5em;
+      font-size: 0.9em;
+      opacity: 0.9;
+      /* aria-live polite to update screen readers quietly */
     }
 
-    .container {
+    /* --- Planner Container --- */
+    #planner {
       max-width: 600px;
-      margin: 0 auto;
-      padding: 1em;
-      transform: translateZ(0); /* This layer is at base level */
+      margin: 1em auto;
+      padding: 0 1em;
     }
 
-    /* The schedule timeline */
+    /* --- Hour Blocks & Slots --- */
     .hour-block {
       display: flex;
       border-bottom: 1px solid #ccc;
       padding: 0.5em 0;
-      transition: transform 0.4s ease;
     }
-    .hour-block:hover {
-      transform: translateZ(10px) rotateX(2deg); /* subtle 3D pop */
-    }
-
     .hour-label {
-      width: 60px; 
-      color: #003366; 
-      font-weight: bold;
+      width: 60px;
       flex-shrink: 0;
+      font-weight: bold;
+      color: #003366;
+      font-size: 0.9em;
+      line-height: 1.3;
+      margin-right: 0.25em;
     }
-
     .slots {
-      flex: 1; 
-      display: flex; 
-      flex-wrap: wrap; 
+      display: flex;
+      flex-wrap: wrap; /* wrap so if it's tight, it won't break layout */
       gap: 4px;
+      flex: 1;
     }
     .slot {
-      flex: 1 1 22%; 
+      flex: 1 1 22%; /* 4 columns across by default */
       min-height: 50px;
-      background: #f9f9ff; 
-      border: 2px solid #e0e0f0; 
+      background: #f9f9ff; /* slight bluish tint */
+      border: 2px solid #e0e0f0;
       border-radius: 4px;
       position: relative;
-      transition: border-color 0.2s ease;
+      text-align: left;
+      padding: 4px;
+      /* Make the slot a drop target for HTML5 DnD */
+    }
+    .slot:empty:before {
+      content: "Add task…";
+      color: #aaa;
+      font-size: 0.8em;
     }
     .slot.highlight {
-      border-color: #4A90E2;
+      border-color: #4A90E2; /* highlight color when hovered for drop */
+    }
+    /* contenteditable placeholder styling */
+    .slot[contenteditable="true"]:empty:before {
+      content: "Tap to add…";
+      color: #aaa;
     }
 
+    /* --- Draggable Emojis --- */
     .task-emoji {
-      font-size: 1.4em; 
-      cursor: grab;
-      user-select: none; 
+      font-size: 1.4em;
       display: inline-block;
       margin: 2px;
-      transition: transform 0.2s ease;
+      cursor: grab;
+      user-select: none; /* prevent text highlight while dragging */
+      vertical-align: middle;
+      transition: transform 0.15s ease;
     }
     .task-emoji:active {
-      cursor: grabbing;
+      cursor: grabbing; /* visual feedback while pressing down */
     }
-
-    /* 3D tilt effect on drag or hover if you want more flair */
     .task-emoji.dragging {
       transform: scale(1.2) rotateZ(5deg);
     }
 
-    /* Reduce motion for users with that preference */
+    /* --- Emoji Deck Container --- */
+    #emojiDeck {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 1em;
+      text-align: center;
+      background: #e7f1ff; /* a light blue background to separate deck */
+      border-bottom: 2px solid #cce;
+    }
+    #emojiDeck h2 {
+      margin-bottom: 0.5em;
+      font-size: 1.1em;
+      color: #003366;
+    }
+
+    /* --- Accessibility & Live Region for Drag Announcements --- */
+    #dragStatus {
+      position: absolute;
+      left: -9999px; /* hide offscreen */
+      top: auto;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    }
+
+    /* --- Reduce Motion Query --- */
     @media (prefers-reduced-motion: reduce) {
       * {
         transition: none !important;
         animation: none !important;
       }
-      .hour-block:hover { transform: none !important; }
     }
   </style>
 </head>
-
 <body>
+  <!-- HEADER -->
   <header>
-    <h1>📅 3D Emoji Planner</h1>
+    <h1>📅 Emoji Day Planner</h1>
     <div id="currentTime" aria-live="polite"></div>
   </header>
 
-  <div class="container" id="planner">
-    <!-- Hour blocks 6 AM - Midnight (shown in code or generated by JS) -->
-    <!-- e.g., repeated blocks with .hour-block, .hour-label, .slots, .slot elements -->
+  <!-- EMOJI DECK: Draggable items to add to the planner -->
+  <div id="emojiDeck">
+    <h2>Drag from Here ➡️</h2>
+    <span class="task-emoji" draggable="true" id="emoji1">🍽️</span>
+    <span class="task-emoji" draggable="true" id="emoji2">🏫</span>
+    <span class="task-emoji" draggable="true" id="emoji3">🏋️</span>
+    <span class="task-emoji" draggable="true" id="emoji4">🚶</span>
+    <span class="task-emoji" draggable="true" id="emoji5">📖</span>
+    <span class="task-emoji" draggable="true" id="emoji6">💻</span>
+    <span class="task-emoji" draggable="true" id="emoji7">🛏️</span>
+    <span class="task-emoji" draggable="true" id="emoji8">🧹</span>
+    <span class="task-emoji" draggable="true" id="emoji9">🎨</span>
+    <span class="task-emoji" draggable="true" id="emoji10">🍎</span>
+    <br />
+    <span class="task-emoji" draggable="true" id="emoji11">📱</span>
+    <span class="task-emoji" draggable="true" id="emoji12">⏰</span>
+    <span class="task-emoji" draggable="true" id="emoji13">🍔</span>
+    <span class="task-emoji" draggable="true" id="emoji14">🦮</span>
+    <span class="task-emoji" draggable="true" id="emoji15">🧑‍🍳</span>
   </div>
 
-  <div aria-live="polite" id="dragStatus" style="position:absolute; left:-9999px;"></div> 
+  <!-- DRAG ANNOUNCEMENTS (ARIA LIVE) -->
+  <div id="dragStatus" aria-live="polite"></div>
 
-  <!-- Inline JavaScript (dragDrop.js, timeDisplay.js, etc.) -->
+  <!-- MAIN PLANNER -->
+  <div id="planner">
+    <!-- JavaScript will generate hour blocks from 06:00 to 24:00 -->
+  </div>
+
   <script>
-    /*************************************
-     * timeDisplay.js
-     *************************************/
+    /*******************************************
+     * LIVE TIME DISPLAY
+     *******************************************/
     function updateClock() {
       const now = new Date();
-      let hrs = now.getHours(), mins = now.getMinutes();
+      let hrs = now.getHours();
+      let mins = now.getMinutes();
       const ampm = hrs >= 12 ? 'PM' : 'AM';
-      let displayHrs = ((hrs + 11) % 12) + 1;
+      let displayHrs = ((hrs + 11) % 12) + 1; // convert 0-23 -> 1-12
       let displayMins = mins.toString().padStart(2, '0');
       document.getElementById('currentTime').innerText =
-        \`Current time: \${displayHrs}:\${displayMins} \${ampm}\`;
+        \`Now: \${displayHrs}:\${displayMins} \${ampm}\`;
     }
     setInterval(updateClock, 60000);
-    updateClock();
+    updateClock(); // initial call
 
-    /*************************************
-     * planner generation
-     *************************************/
+    /*******************************************
+     * GENERATE THE DAY PLANNER SLOTS
+     * 6:00 AM -> 00:00 (midnight) in 15-min increments
+     *******************************************/
     const plannerEl = document.getElementById('planner');
-    // Generate 6:00 AM to 12:00 midnight
-    for(let h=6; h<24; h++){
+    for (let hour = 6; hour < 24; hour++) {
       const hourBlock = document.createElement('div');
       hourBlock.className = 'hour-block';
 
+      // Hour label
       const label = document.createElement('div');
       label.className = 'hour-label';
-      let displayH = ((h + 11) % 12) + 1;
-      let ampm = h >= 12 ? 'PM' : 'AM';
+      // convert 24hr -> 12hr
+      let displayH = ((hour + 11) % 12) + 1;
+      let ampm = hour >= 12 ? 'PM' : 'AM';
       label.textContent = \`\${displayH}:00 \${ampm}\`;
 
+      // The 4 quarter-hour slots
       const slotsDiv = document.createElement('div');
       slotsDiv.className = 'slots';
 
-      for(let quarter=0; quarter<4; quarter++){
+      for (let q = 0; q < 4; q++) {
         const slot = document.createElement('div');
         slot.className = 'slot';
-        slot.dataset.time = \`\${h}:\${quarter*15}\`; // e.g., "8:15"
+        // store data-time for reference
+        let timeMins = q * 15;
+        slot.dataset.time = \`\${hour}:\${timeMins}\`;
 
-        // Attach drag event for HTML5 DnD or custom approach
-        slot.ondragover = (e)=>{ e.preventDefault(); };
-        slot.ondrop = onDrop;
-        slot.ondragenter = (e)=> slot.classList.add('highlight');
-        slot.ondragleave = (e)=> slot.classList.remove('highlight');
-        
+        // Make the slot contenteditable for custom text input
+        slot.contentEditable = "true";
+
+        // Add dragover, drop, etc. for HTML5 DnD
+        slot.addEventListener('dragover', (e) => {
+          e.preventDefault(); 
+          e.dataTransfer.dropEffect = 'move';
+        });
+        slot.addEventListener('drop', onDrop);
+        slot.addEventListener('dragenter', (e) => {
+          slot.classList.add('highlight');
+        });
+        slot.addEventListener('dragleave', (e) => {
+          slot.classList.remove('highlight');
+        });
+
         slotsDiv.appendChild(slot);
       }
 
@@ -169,57 +247,103 @@
       plannerEl.appendChild(hourBlock);
     }
 
-    /*************************************
-     * dragDrop.js
-     *************************************/
-    function onDragStart(e){
-      e.dataTransfer.setData("text/plain", e.target.id);
-      e.dataTransfer.effectAllowed = "move";
-      e.target.classList.add("dragging");
-      announce(\`Picked up \${e.target.innerText.trim()}.\`);
+    /*******************************************
+     * DRAG & DROP LOGIC
+     * For each .task-emoji
+     *******************************************/
+    const emojis = document.querySelectorAll('.task-emoji');
+    emojis.forEach(emoji => {
+      emoji.addEventListener('dragstart', onDragStart);
+      // just for style feedback
+      emoji.addEventListener('touchstart', () => {
+        emoji.classList.add('dragging');
+      });
+      emoji.addEventListener('touchend', () => {
+        emoji.classList.remove('dragging');
+      });
+    });
+
+    // Basic dragstart handler
+    function onDragStart(e) {
+      e.dataTransfer.setData('text/plain', e.target.id);
+      e.dataTransfer.effectAllowed = 'move';
+      e.target.classList.add('dragging');
+      announce(\`Picked up \${e.target.textContent.trim()}\`);
     }
 
-    function onDrop(e){
+    // Drop handler
+    function onDrop(e) {
       e.preventDefault();
-      const data = e.dataTransfer.getData("text/plain");
-      const draggedEl = document.getElementById(data);
-      e.currentTarget.appendChild(draggedEl);
-      draggedEl.classList.remove("dragging");
-      e.currentTarget.classList.remove("highlight");
-      announce(\`Dropped at \${formatSlotTime(e.currentTarget.dataset.time)}.\`);
-      if(navigator.vibrate) navigator.vibrate(30); // not supported on iOS
+      const draggedId = e.dataTransfer.getData('text/plain');
+      const draggedEl = document.getElementById(draggedId);
+
+      // Add the emoji's text to the contenteditable or just append the node
+      // 1) Option A: just place the emoji inline in the slot
+      // e.currentTarget.appendChild(draggedEl);
+
+      // 2) Option B: Insert the emoji character at caret in contenteditable
+      // We'll do option B for demonstration:
+      if (draggedEl) {
+        // If this slot is contenteditable, we can insert text
+        // We can insert the actual emoji character, or we can insert the <span>
+        // Let's insert the actual emoji character so the user can type around it
+        // DraggedEl.textContent might be "🍽️" or "🏫", etc.
+        const emojiChar = draggedEl.textContent.trim();
+
+        // Insert emoji at caret or at the end
+        insertTextAtCursor(e.currentTarget, emojiChar + ' ');
+        
+        // (Optional) keep the original deck element or remove it from the deck
+        // We'll keep the deck element in place so user can drag infinite times
+        // If you want to remove from deck, do: draggedEl.remove();
+      }
+
+      e.currentTarget.classList.remove('highlight');
+      draggedEl?.classList.remove('dragging');
+
+      // Let screen readers know
+      announce(\`Dropped in \${formatSlotTime(e.currentTarget.dataset.time)}\`);
+
+      // Attempt a small vibration for supporting devices (not iOS)
+      if (navigator.vibrate) {
+        navigator.vibrate(30);
+      }
     }
 
-    function announce(msg){
+    // Utility: insert text into a contenteditable at the caret position
+    function insertTextAtCursor(contentEditable, text) {
+      contentEditable.focus();
+      const sel = window.getSelection();
+      if (!sel.rangeCount) {
+        // just append if no selection
+        contentEditable.textContent += text;
+        return;
+      }
+      let range = sel.getRangeAt(0);
+      range.deleteContents();
+      let textNode = document.createTextNode(text);
+      range.insertNode(textNode);
+
+      // Move caret after inserted text
+      range.setStartAfter(textNode);
+      range.setEndAfter(textNode);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    // Format 24:minutes -> 12-hour style
+    function formatSlotTime(timeStr) {
+      const [hr, mn] = timeStr.split(':').map(Number);
+      const ampm = (hr >= 12) ? 'PM' : 'AM';
+      const displayH = ((hr + 11) % 12) + 1;
+      const displayM = mn.toString().padStart(2, '0');
+      return \`\${displayH}:\${displayM} \${ampm}\`;
+    }
+
+    // Announce messages for ARIA live region
+    function announce(msg) {
       document.getElementById('dragStatus').textContent = msg;
     }
-
-    function formatSlotTime(timeStr){
-      // quick parse: "8:15" => "8:15 AM/PM"
-      let [hour, mins] = timeStr.split(':').map(Number);
-      let ampm = hour >= 12 ? "PM" : "AM";
-      let dispH = ((hour + 11) % 12) + 1;
-      return \`\${dispH}:\${mins.toString().padStart(2,'0')} \${ampm}\`;
-    }
-
-    /*************************************
-     * Generate some sample tasks with unique IDs
-     *************************************/
-    const sampleTasks = ["🍽️ Breakfast", "🏫 School", "🏃‍♂️ Exercise", "📖 Reading"];
-    const container = document.createElement('div');
-    container.style.margin = "1em 0";
-    container.innerHTML = "<strong>Available Tasks:</strong> ";
-    document.body.insertBefore(container, plannerEl);
-
-    sampleTasks.forEach((txt, i)=>{
-      const span = document.createElement('span');
-      span.className = "task-emoji";
-      span.textContent = txt;
-      span.id = "task"+i; // ID needed for DnD
-      span.draggable = true;
-      span.ondragstart = onDragStart;
-      container.appendChild(span);
-    });
   </script>
 </body>
 </html>
